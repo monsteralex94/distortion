@@ -1,5 +1,6 @@
 use clap::Parser;
-use hound;
+use hound::{WavReader, WavWriter};
+use std::error::Error;
 
 #[derive(Parser)]
 struct Args {
@@ -9,13 +10,10 @@ struct Args {
     volume: f32,
 }
 
-fn main() {
+fn run() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
-    let mut reader = match hound::WavReader::open(args.input) {
-        Ok(r) => r,
-        Err(_) => return,
-    };
+    let mut reader = WavReader::open(args.input)?;
 
     let spec = reader.spec();
 
@@ -28,21 +26,23 @@ fn main() {
         *s = (*s * args.drive).tanh() * args.volume;
     }
 
-    let mut writer = match hound::WavWriter::create(args.output, spec) {
-        Ok(w) => w,
-        Err(_) => return,
-    };
+    let mut writer = WavWriter::create(args.output, spec)?;
 
     for s in samples {
         let s_i16 = (s * i16::MAX as f32).clamp(i16::MIN as f32, i16::MAX as f32) as i16;
-        match writer.write_sample(s_i16) {
-            Ok(_) => (),
-            Err(_) => return,
-        };
+        writer.write_sample(s_i16)?;
     }
 
-    match writer.finalize() {
+    writer.finalize()?;
+
+    Ok(())
+}
+
+fn main() {
+    match run() {
         Ok(_) => (),
-        Err(_) => return,
-    };
+        Err(e) => {
+            println!("Error: {}", e);
+        }
+    }
 }
